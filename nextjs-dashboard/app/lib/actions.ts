@@ -5,6 +5,7 @@ import { sql } from '@vercel/postgres';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+// changing amount from string to number
 const FormSchema = z.object({
   id: z.string(),
   customerId: z.string(),
@@ -13,9 +14,13 @@ const FormSchema = z.object({
   date: z.string(),
 });
 
+// use Zod to update the expected types
+const UpdateInvoice = FormSchema.omit({ id: true, date: true });
+
 const CreateInvoice = FormSchema.omit({ id: true, date: true });
 
 export async function createInvoice(formData: FormData) {
+  // method works butdata format might not be correct -> amount is in string
   //   const rawFormData = {
   //     customerId: formData.get('customerId'),
   //     amount: formData.get('amount'),
@@ -32,9 +37,13 @@ export async function createInvoice(formData: FormData) {
     status: formData.get('status'),
   });
 
+  // Changing dollars to cents
   const amountInCents = amount * 100;
+
+  // New date
   const date = new Date().toISOString().split('T')[0];
 
+  // Adding new entry to database
   await sql`
     INSERT INTO invoices (customer_id, amount, status, date)
     VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
@@ -44,5 +53,25 @@ export async function createInvoice(formData: FormData) {
   revalidatePath('/dashboard/invoices');
 
   // user is then redirected to the dashboard/invoices page
+  redirect('/dashboard/invoices');
+}
+
+export async function updateInvoice(id: string, formData: FormData) {
+  const { customerId, amount, status } = UpdateInvoice.parse({
+    customerId: formData.get('customerId'),
+    amount: formData.get('amount'),
+    status: formData.get('status'),
+  });
+
+  const amountInCents = amount * 100;
+
+  await sql`
+  UPDATE invoices
+  SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
+  WHERE id = ${id}
+    `;
+
+  revalidatePath('/dashboard/invoices');
+
   redirect('/dashboard/invoices');
 }
