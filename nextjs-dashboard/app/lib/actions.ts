@@ -8,9 +8,15 @@ import { redirect } from 'next/navigation';
 // changing amount from string to number
 const FormSchema = z.object({
   id: z.string(),
-  customerId: z.string(),
-  amount: z.coerce.number(),
-  status: z.enum(['pending', 'paid']),
+  customerId: z.string({
+    invalid_type_error: 'Please select a customer',
+  }),
+  amount: z.coerce.number().gt(0, {
+    message: 'Please enter an amount greater than $0',
+  }),
+  status: z.enum(['pending', 'paid'], {
+    invalid_type_error: 'Please select and invoice status',
+  }),
   date: z.string(),
 });
 
@@ -19,7 +25,17 @@ const UpdateInvoice = FormSchema.omit({ id: true, date: true });
 
 const CreateInvoice = FormSchema.omit({ id: true, date: true });
 
-export async function createInvoice(formData: FormData) {
+export type State = {
+  errors?: {
+    customerID?: string[];
+    amount?: string[];
+    status?: string[];
+  };
+  message?: string | null;
+};
+
+// prevState - contains the state passed from the useFormState hook. You won't be using it in the action in this example, but it's a required prop.
+export async function createInvoice(prevState: State, formData: FormData) {
   // method works but data format might not be correct -> amount is string NOT number
   //   const rawFormData = {
   //     customerId: formData.get('customerId'),
@@ -31,11 +47,19 @@ export async function createInvoice(formData: FormData) {
   //   const rawFormData = Object.fromEntries(formData.entries())
 
   // using Z to get data in format we need
-  const { customerId, amount, status } = CreateInvoice.parse({
+  const validatedFields = CreateInvoice.safeParse({
     customerId: formData.get('customerId'),
     amount: formData.get('amount'),
     status: formData.get('status'),
   });
+
+  // If form validations fails, return erros early. Otherwise, continue
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: 'Missing Fields. Failed to Create Invoice',
+    };
+  }
 
   // Changing dollars to cents
   const amountInCents = amount * 100;
